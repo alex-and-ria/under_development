@@ -1,236 +1,128 @@
-/*
- * This is one of two projects;
- * This project describes master's behavior in SPI communication.
- * Operation sequence:
- * 1) Slaves configuring their SPI interfaces followed by sending confirmation as rising edge on
- * PA0 and PA1 GPIO pins;
- * 2) Master accepts this confirmation, selects slave for communication via PWM (slaves using ADC
- * to distinguish which of them is selected), receives confirmation from slaves (falling edge on PA0
- * or PA1 pin), enables SPI and starts communication.
+/* This is one of two projects;
+ * This project describes slaves behavior in SPI communication.
+ * Operating sequence:
+ * 1) Slaves configuring GPIO, DMA, SPI, ADC peripherals and sending confirmation (rising edge);
+ * 2) Slaves receiving pwm signal from master, through ADC peripheral recognizing one of them as
+ * selected, selected slave sends confirmation to master (falling edge); this GPIO pin
+ * reconfiguring as EXTI input (rising edge);
  * 3) DMA is used for communication;
- * 4) Rising edge at PA0 (for first slave) or at PA1 (for second slave) is a signal that the
- * message transmitted and new SPI communication starts.
- * 5) SPI interfaces disabled, reconfigured and new iteration starts. Master waits for answer from
- * slave;
- * 6) After several communications, SPI interface disabled.
- * (PA6 -- diode pin);
- * PA2 -- TIM2_CH3;
- * PA5 SPI1_SCK; PA7 SPI1_MOSI; PA6 SPI1_MISO;
- * master should be started first;
+ * 4) Rising edge on EXTI pin is a signal that the message received and new SPI communication
+ * starts;
+ * 5) SPI interface disabled, reconfigured and new iteration starts. Slave transmit it's message
+ * to the master;
+ * 6) After transferring slave generates falling edge on GPIO pin;
+ * 7) SPI interface disabled;
+ *
+ * GPIO,DMA,SPI,ADC,EXTI;
+ * confirmation pin (same for slaves): PA1;
+ * SPI pins: PA5 -- SPI1_SCK; PA6 -- SPI1_MISO; PA7 -- SPI1_MOSI;
+ * ADC pin: PA0 -- ADC12_IN0;
+ * DMA: SPI1_RX -- channel 2; SPI1_TX -- channel 3 (dma1);
  */
 
-#include<stm32f4xx_rcc.h>
-#include<stm32f4xx_gpio.h>
-#include<stm32f4xx_exti.h>
-#include<stm32f4xx_tim.h>
-#include<stm32f4xx_dma.h>
-#include<stm32f4xx_spi.h>
-#include<stm32f4xx_syscfg.h>
-#include<stm32f4xx_pwr.h>
-#include<misc.h>
+#include<stm32f10x_rcc.h>
+#include<stm32f10x_gpio.h>
+
+#define sl1
+//#define sl2
 
 #define RX_BUF_SZ 50
 
-uint8_t tx_buf[]="Hi, initiation SPI communication, master unit \0";
+#ifdef sl1
+	uint8_t tx_buf[]="Hi, master, it is sl1 responding \0";
+	uint32_t adc_lth=0, adc_hth=0x7FF;//as adc has 12-bit resolution, high_threshold is ((2^12)-1)/2);
+
+#elif defined(sl2)
+	uint8_t tx_buf[]="Hi, master, current response is the second one \0";
+	uint32_t adc_lth=0x7FF, adc_hth=0xF;
+#endif
+
 uint8_t rx_buf[RX_BUF_SZ];
-uint8_t is_s1=0,is_s2=0,s1_spi_ready=0,s2_spi_ready=0;
 
 void init_gpios(){
-	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA,ENABLE);//PA0 and PA1 -- pins for interrupts;
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG,ENABLE);//enable system configuration controller to
-//manage the external interrupt line connection to the GPIOs;
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA|RCC_APB2Periph_AFIO,ENABLE);
 	GPIO_InitTypeDef gpio_struct;
-	gpio_struct.GPIO_Mode=GPIO_Mode_IN;//to use external interrupt lines, the port must be
-//configured in input mode;
-	gpio_struct.GPIO_Pin=GPIO_Pin_0|GPIO_Pin_1;
-	gpio_struct.GPIO_PuPd=GPIO_PuPd_DOWN;
-	GPIO_Init(GPIOA,&gpio_struct);
 
-	SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOA,EXTI_PinSource0);
-	SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOA,EXTI_PinSource1);
-
-	EXTI_InitTypeDef exti_struct;
-	exti_struct.EXTI_Line=EXTI_Line0/*|EXTI_Line1*/;//PA0 -- line0;
-	exti_struct.EXTI_LineCmd=ENABLE;//enable interrupt;
-	exti_struct.EXTI_Mode=EXTI_Mode_Interrupt;//selected interrupt mode;
-	exti_struct.EXTI_Trigger=EXTI_Trigger_Rising_Falling;
-	EXTI_Init(&exti_struct);
-	exti_struct.EXTI_Line=EXTI_Line1;//PA1 -- line1;
-	EXTI_Init(&exti_struct);
-
-	NVIC_InitTypeDef nvic_struct;
-	nvic_struct.NVIC_IRQChannel=EXTI0_IRQn/*|EXTI1_IRQn*/;
-	nvic_struct.NVIC_IRQChannelCmd=ENABLE;
-	nvic_struct.NVIC_IRQChannelPreemptionPriority=10;
-	nvic_struct.NVIC_IRQChannelSubPriority=0;
-	NVIC_Init(&nvic_struct);
-	nvic_struct.NVIC_IRQChannel=EXTI1_IRQn;
-	NVIC_Init(&nvic_struct);
-
-////led configuration (PA6)
-//	gpio_struct.GPIO_Mode=GPIO_Mode_OUT;
-//	gpio_struct.GPIO_OType=GPIO_OType_PP;
-//	gpio_struct.GPIO_Pin=GPIO_Pin_6;
-//	gpio_struct.GPIO_PuPd=GPIO_PuPd_NOPULL;
-//	gpio_struct.GPIO_Speed=GPIO_Speed_100MHz;
-//	GPIO_Init(GPIOA,&gpio_struct);
-
-/*	RCC_ClocksTypeDef rcc_clocks;
- * 	RCC_GetClocksFreq(&rcc_clocks);
- * SYSCLK_Frequency	16000000
- * HCLK_Frequency	16000000
- * PCLK1_Frequency	16000000
- * PCLK2_Frequency	16000000
- */
-
-//pwm configuration
-	GPIO_PinAFConfig(GPIOA,GPIO_PinSource2,GPIO_AF_TIM2);//PA2 -- TIM2_CH3;
-	gpio_struct.GPIO_Mode=GPIO_Mode_AF;
-	gpio_struct.GPIO_OType=GPIO_OType_PP;
-	gpio_struct.GPIO_Pin=GPIO_Pin_2;
-	gpio_struct.GPIO_PuPd=GPIO_PuPd_NOPULL;
-	gpio_struct.GPIO_Speed=GPIO_Speed_100MHz;
-	GPIO_Init(GPIOA,&gpio_struct);
-
-//spi configuration;
-	GPIO_PinAFConfig(GPIOA,GPIO_PinSource5,GPIO_AF_SPI1);
-	GPIO_PinAFConfig(GPIOA,GPIO_PinSource6,GPIO_AF_SPI1);
-	GPIO_PinAFConfig(GPIOA,GPIO_PinSource7,GPIO_AF_SPI1);
-
-	gpio_struct.GPIO_Mode=GPIO_Mode_AF;
-	gpio_struct.GPIO_OType=GPIO_OType_PP;
-	gpio_struct.GPIO_Pin=GPIO_Pin_5|GPIO_Pin_7|GPIO_Pin_6;//SPI1_SCK, SPI1_MOSI and SPI1_MISO;
-	gpio_struct.GPIO_PuPd=GPIO_PuPd_DOWN;
+	gpio_struct.GPIO_Mode=GPIO_Mode_Out_PP;
+	gpio_struct.GPIO_Pin=GPIO_Pin_1;
 	gpio_struct.GPIO_Speed=GPIO_Speed_50MHz;
 	GPIO_Init(GPIOA,&gpio_struct);
 
+//spi configuration;
+	gpio_struct.GPIO_Mode=GPIO_Mode_AIN;
+	gpio_struct.GPIO_Pin=GPIO_Pin_5|GPIO_Pin_7;//PA5 (SPI1_SCK) and PA7 (SPI1_MOSI) are inputs;
+	GPIO_Init(GPIOA,&gpio_struct);
+
+	gpio_struct.GPIO_Mode=GPIO_Mode_AF_PP;
+	gpio_struct.GPIO_Pin=GPIO_Pin_6;//PA6 (SPI1_MISO) -- output;
+	GPIO_Init(GPIOA,&gpio_struct);
+
+//ADC configuration;
+	gpio_struct.GPIO_Mode=GPIO_Mode_AIN;
+	gpio_struct.GPIO_Pin=GPIO_Pin_0;
+	GPIO_Init(GPIOA,&gpio_struct);
 }
 
-void strt();
-
-void stop_extis(){
-	EXTI_InitTypeDef exti_struct;
-	exti_struct.EXTI_Line=EXTI_Line0;//PA0 -- line0;
-	exti_struct.EXTI_LineCmd=DISABLE;
-	exti_struct.EXTI_Mode=EXTI_Mode_Interrupt;//selected interrupt mode;
-	EXTI_Init(&exti_struct);
-
-	exti_struct.EXTI_Line=EXTI_Line1;//PA1 -- line1;
-	EXTI_Init(&exti_struct);
+bool is_selected(){
+	ADC1->CR2|=ADC_CR2_SWSTART;//Starts conversion of regular channels (1st channel);
+	while(!(ADC1->SR&ADC_SR_EOC));//waiting for conversion to be completed;
+	uint32_t adc_res=ADC1->DR;//read resulted value; this clearing ADC_SR_EOC bit in ADC1->SR;
+//adc peripheral registers have to be accessed by words (32-bit);
+	if((adc_res>adc_lth)&&(adc_res<adc_hth))
+		return 1;
+	else
+		return 0;
 }
 
-void EXTI0_IRQHandler(){
-//	GPIO_SetBits(GPIOA,GPIO_Pin_6);
-	if(GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_0)){//if current pin state is '1', rising edge detected;
-		s1_spi_ready=1;
+void init_adc(){
+	ADC1->SQR3=0;//selected channel 0;
+	ADC1->SMPR2|=ADC_SMPR2_SMP0;//set maximum sample time for ADC1_CH0; (for accuracy);
+	ADC1->CR2|=ADC_CR2_EXTSEL|ADC_CR2_EXTTRIG;//select SWSTART as external event used to
+//trigger the start of conversion of a regular group and enable this external trigger;
+	ADC1->CR2|=ADC_CR2_CAL;//enable ADC1 calibration;
+	while(!(ADC1->CR2&ADC_CR2_CAL)){//ADC_CR2_CAL should be reset by hardware after
+//calibration is complete, but is seems that this works some another way because
+//while((ADC1->CR2&ADC_CR2_CAL)) causes looping;
+		//tmp_chk=ADC1->CR2&ADC_CR2_CAL;
+		//tmp_chk1=!(ADC1->CR2&ADC_CR2_CAL);
 	}
-	else{
-		is_s1=1;
-		stop_extis();
-		strt();
-	}
-	EXTI_ClearFlag(EXTI_Line0);
+	ADC1->CR2|=ADC_CR2_ADON;//Enable ADC to start conversion;
 }
 
-void EXTI1_IRQHandler(){
-//	GPIO_ResetBits(GPIOA,GPIO_Pin_6);
-	if(GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_1)){//if current pin state is '1', rising edge detected;
-		s2_spi_ready=1;
-	}
-	else{
-		is_s2=1;
-		stop_extis();
-		strt();
-	}
-	EXTI_ClearFlag(EXTI_Line1);
+void init_dma(){//SPI1_RX -- channel 2; SPI1_TX -- channel 3 (dma1);
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1,ENABLE);
+	DMA1_Channel2->CPAR=(uint32_t)(SPI1->DR);
+	DMA1_Channel2->CMAR=(uint32_t)(rx_buf);
+	DMA1_Channel2->CNDTR=RX_BUF_SZ/2;//SPI data transmitted in half-word mode;
+	DMA1_Channel2->CCR|=DMA_CCR2_PL_0;//DMA channel transfer priority at medium level;
+	DMA1_Channel2->CCR|=DMA_CCR2_MSIZE_0|DMA_CCR2_PSIZE_0|DMA_CCR2_MINC;//DMA configured as folows:
+//memory size is half-word; peripheral size is half-word; memory increment mode enabled;
+//DMA_CCR2_DIR is 0x0 by default (data read from peripheral);
+	DMA1_Channel2->CCR|=DMA_CCR2_EN;//enable DMA1_Channel2;
+
+	DMA1_Channel3->CPAR=(uint32_t)(SPI1->DR);
+	DMA1_Channel3->CMAR=(uint32_t)(tx_buf);
+	DMA1_Channel3->CNDTR=sizeof(tx_buf)/2;//SPI data transmitted in half-word mode;
+	DMA1_Channel3->CCR|=DMA_CCR3_PL_0;//DMA channel transfer priority at medium level;
+	DMA1_Channel3->CCR|=DMA_CCR3_MSIZE_0|DMA_CCR3_PSIZE_0|DMA_CCR3_MINC|DMA_CCR3_DIR;//DMA
+//configured as folows: memory size is half-word; peripheral size is half-word; memory increment
+//mode enabled; data read from memory;
+	DMA1_Channel3->CCR|=DMA_CCR3_EN;//enable DMA1_Channel3;
 }
 
-void init_pwm(){
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2,ENABLE);
-
-	TIM_TimeBaseInitTypeDef tim_struct;
-	tim_struct.TIM_ClockDivision=TIM_CKD_DIV1;//no clock division;
-	tim_struct.TIM_CounterMode=TIM_CounterMode_Up;
-	tim_struct.TIM_Period=99;//period consists of 100 ticks;
-	tim_struct.TIM_Prescaler=0;//CK_CNT is equal to fCK_PSC;
-	tim_struct.TIM_RepetitionCounter=0;//This parameter is valid only for TIM1 and TIM8;
-	TIM_TimeBaseInit(TIM2,&tim_struct);
-	TIM_Cmd(TIM2,ENABLE);
-
-	TIM_OCInitTypeDef tim_oc_struct;
-	tim_oc_struct.TIM_OCMode=TIM_OCMode_PWM1;//PWM mode 1 - In upcounting, channel 1 is active
-//as long as TIMx_CNT<TIMx_CCR1 else inactive;
-	tim_oc_struct.TIM_OCPolarity=TIM_OCPolarity_High;
-	tim_oc_struct.TIM_OutputState=TIM_OutputState_Enable;
-	tim_oc_struct.TIM_Pulse=50;//TIM_Pulse/(TIM_Period+1)==duty_cycle;
-	TIM_OC3Init(TIM2,&tim_oc_struct);
-	TIM_OC3PreloadConfig(TIM2,TIM_OCPreload_Enable);
-}
-
-void init_dma(){//SPI1_TX -- channel 3, stream 3; SPI1_RX -- channel 3 stream 0; (dma2);
-	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_DMA2,ENABLE);
-	DMA_InitTypeDef dma_struct;
-
-//SPI_TX configuration;
-	dma_struct.DMA_Channel=DMA_Channel_3;
-	dma_struct.DMA_PeripheralBaseAddr=(uint32_t)(&(SPI1->DR));
-	dma_struct.DMA_Memory0BaseAddr=(uint32_t)tx_buf;
-	dma_struct.DMA_DIR=DMA_DIR_MemoryToPeripheral;
-	dma_struct.DMA_BufferSize=sizeof(tx_buf)/2;//transfer performed by half-words;
-	dma_struct.DMA_PeripheralInc=DMA_PeripheralInc_Disable;//SPI1->DR is the same register for all
-//transfers;
-	dma_struct.DMA_MemoryInc=DMA_MemoryInc_Enable;//moving through the tx_buf;
-	dma_struct.DMA_PeripheralDataSize=DMA_PeripheralDataSize_HalfWord;//SPI allows to transmit data by
-//half-words;
-	dma_struct.DMA_MemoryDataSize=DMA_MemoryDataSize_HalfWord;
-	dma_struct.DMA_Mode=DMA_Mode_Normal;
-	dma_struct.DMA_Priority=DMA_Priority_Medium;
-	dma_struct.DMA_FIFOMode=DMA_FIFOMode_Disable;//direct mode selected;
-	dma_struct.DMA_MemoryBurst=DMA_MemoryBurst_Single;
-	dma_struct.DMA_PeripheralBurst=DMA_PeripheralBurst_Single;
-	DMA_Init(DMA2_Stream3,&dma_struct);//SPI1_TX;
-	DMA_Cmd(DMA2_Stream3,ENABLE);
-
-//SPI_RX configuration;
-	dma_struct.DMA_Memory0BaseAddr=(uint32_t)rx_buf;
-	dma_struct.DMA_DIR=DMA_DIR_PeripheralToMemory;
-	dma_struct.DMA_BufferSize=RX_BUF_SZ/2;
-	DMA_Init(DMA2_Stream0,&dma_struct);//SPI1_RX;
-	DMA_Cmd(DMA2_Stream0,ENABLE);
-}
-
-void init_spi(){//PA5 SPI1_SCK; PA7 SPI1_MOSI; PA6 SPI1_MISO;
+void init_spi(){//PA5 -- SPI1_SCK; PA6 -- SPI1_MISO; PA7 -- SPI1_MOSI;
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1,ENABLE);
-	SPI_I2S_DeInit(SPI1);
-	SPI_InitTypeDef spi_struct;
-	spi_struct.SPI_Direction=SPI_Direction_2Lines_FullDuplex;
-	spi_struct.SPI_Mode=SPI_Mode_Master;
-	spi_struct.SPI_DataSize=SPI_DataSize_16b;
-	spi_struct.SPI_CPOL=SPI_CPOL_Low;
-	spi_struct.SPI_CPHA=SPI_CPHA_1Edge;
-	spi_struct.SPI_NSS=SPI_NSS_Soft;
-	spi_struct.SPI_BaudRatePrescaler=SPI_BaudRatePrescaler_2;
-	spi_struct.SPI_FirstBit=SPI_FirstBit_MSB;
-	spi_struct.SPI_CRCPolynomial=7;
-	SPI_Init(SPI1,&spi_struct);
-	//SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Tx,ENABLE);
-	//SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Rx,ENABLE);
-	//SPI_Cmd(SPI1,ENABLE);
-}
+	SPI1->CR1|=SPI_CR1_DFF|SPI_CR1_SSM|SPI_CR1_CRCEN;//16-bit data frame format is selected;
+//CK to 0 when idle, first clock transition is the first data capture edge, MSB-first, SSI bit
+//and MSTR bit are cleared by default; NSS software mode selected; CRC calculation selected;
+	SPI1->CR2|=SPI_CR2_RXDMAEN/*|SPI_CR2_TXDMAEN*/;//Rx buffer DMA enabled;
+	SPI1->CR1|=SPI_CR1_SPE;
 
-void strt(){
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2,DISABLE);//disabling pwm;
-	uint16_t selected_pin=(is_s1)?GPIO_Pin_0:GPIO_Pin_1;//selecting pin for further communication;
-	SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Tx,ENABLE);//starting dma_tx;
-	SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Rx,ENABLE);//starting dma_rx;
-	SPI_Cmd(SPI1,ENABLE);//starting spi;
-
-
+	GPIO_SetBits(GPIOA,GPIO_Pin_1);
 }
 
 int main(void){
 	init_gpios();
-	init_pwm();
 	init_dma();
 	init_spi();
 
