@@ -1,13 +1,14 @@
 /*
- * This is one of tree projects;
+ * This is one of two projects;
  * This project describes master's behavior in SPI communication.
  * Operation sequence:
  * 1) Slaves configuring their SPI interfaces followed by sending confirmation as rising edge on
  * PA0 and PA1 GPIO pins;
  * 2) Master accepts this confirmation, selects slave for communication via PWM (slaves using ADC
- * to distinguish which of them is selected), enables SPI and starts communication.
+ * to distinguish which of them is selected), receives confirmation from slaves (falling edge on PA0
+ * or PA1 pin), enables SPI and starts communication.
  * 3) DMA is used for communication;
- * 4) Falling edge at PA0 (for first slave) or at PA1 (for second slave) is a signal that the
+ * 4) Rising edge at PA0 (for first slave) or at PA1 (for second slave) is a signal that the
  * message transmitted and new SPI communication starts.
  * 5) SPI interfaces disabled, reconfigured and new iteration starts. Master waits for answer from
  * slave;
@@ -15,6 +16,7 @@
  * (PA6 -- diode pin);
  * PA2 -- TIM2_CH3;
  * PA5 SPI1_SCK; PA7 SPI1_MOSI; PA6 SPI1_MISO;
+ * master should be started first;
  */
 
 #include<stm32f4xx_rcc.h>
@@ -31,6 +33,7 @@
 
 uint8_t tx_buf[]="Hi, initiation SPI communication, master unit \0";
 uint8_t rx_buf[RX_BUF_SZ];
+uint8_t is_s1=0,is_s2=0,s1_spi_ready=0,s2_spi_ready=0;
 
 void init_gpios(){
 	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA,ENABLE);//PA0 and PA1 -- pins for interrupts;
@@ -50,7 +53,7 @@ void init_gpios(){
 	exti_struct.EXTI_Line=EXTI_Line0/*|EXTI_Line1*/;//PA0 -- line0;
 	exti_struct.EXTI_LineCmd=ENABLE;//enable interrupt;
 	exti_struct.EXTI_Mode=EXTI_Mode_Interrupt;//selected interrupt mode;
-	exti_struct.EXTI_Trigger=EXTI_Trigger_Rising;
+	exti_struct.EXTI_Trigger=EXTI_Trigger_Rising_Falling;
 	EXTI_Init(&exti_struct);
 	exti_struct.EXTI_Line=EXTI_Line1;//PA1 -- line1;
 	EXTI_Init(&exti_struct);
@@ -64,13 +67,13 @@ void init_gpios(){
 	nvic_struct.NVIC_IRQChannel=EXTI1_IRQn;
 	NVIC_Init(&nvic_struct);
 
-//led configuration (PA6)
-	gpio_struct.GPIO_Mode=GPIO_Mode_OUT;
-	gpio_struct.GPIO_OType=GPIO_OType_PP;
-	gpio_struct.GPIO_Pin=GPIO_Pin_6;
-	gpio_struct.GPIO_PuPd=GPIO_PuPd_NOPULL;
-	gpio_struct.GPIO_Speed=GPIO_Speed_100MHz;
-	GPIO_Init(GPIOA,&gpio_struct);
+////led configuration (PA6)
+//	gpio_struct.GPIO_Mode=GPIO_Mode_OUT;
+//	gpio_struct.GPIO_OType=GPIO_OType_PP;
+//	gpio_struct.GPIO_Pin=GPIO_Pin_6;
+//	gpio_struct.GPIO_PuPd=GPIO_PuPd_NOPULL;
+//	gpio_struct.GPIO_Speed=GPIO_Speed_100MHz;
+//	GPIO_Init(GPIOA,&gpio_struct);
 
 /*	RCC_ClocksTypeDef rcc_clocks;
  * 	RCC_GetClocksFreq(&rcc_clocks);
@@ -103,25 +106,42 @@ void init_gpios(){
 
 }
 
-void EXTI0_IRQHandler(){
-	GPIO_SetBits(GPIOA,GPIO_Pin_6);
+void strt();
 
+void stop_extis(){
 	EXTI_InitTypeDef exti_struct;
 	exti_struct.EXTI_Line=EXTI_Line0;//PA0 -- line0;
-	exti_struct.EXTI_LineCmd=DISABLE;//enable interrupt;
+	exti_struct.EXTI_LineCmd=DISABLE;
 	exti_struct.EXTI_Mode=EXTI_Mode_Interrupt;//selected interrupt mode;
 	EXTI_Init(&exti_struct);
+
+	exti_struct.EXTI_Line=EXTI_Line1;//PA1 -- line1;
+	EXTI_Init(&exti_struct);
+}
+
+void EXTI0_IRQHandler(){
+//	GPIO_SetBits(GPIOA,GPIO_Pin_6);
+	if(GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_0)){//if current pin state is '1', rising edge detected;
+		s1_spi_ready=1;
+	}
+	else{
+		is_s1=1;
+		stop_extis();
+		strt();
+	}
 	EXTI_ClearFlag(EXTI_Line0);
 }
 
 void EXTI1_IRQHandler(){
-	GPIO_ResetBits(GPIOA,GPIO_Pin_6);
-
-	EXTI_InitTypeDef exti_struct;
-	exti_struct.EXTI_Line=EXTI_Line1;//PA1 -- line1;
-	exti_struct.EXTI_LineCmd=DISABLE;//enable interrupt;
-	exti_struct.EXTI_Mode=EXTI_Mode_Interrupt;//selected interrupt mode;
-	EXTI_Init(&exti_struct);
+//	GPIO_ResetBits(GPIOA,GPIO_Pin_6);
+	if(GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_1)){//if current pin state is '1', rising edge detected;
+		s2_spi_ready=1;
+	}
+	else{
+		is_s2=1;
+		stop_extis();
+		strt();
+	}
 	EXTI_ClearFlag(EXTI_Line1);
 }
 
@@ -193,9 +213,19 @@ void init_spi(){//PA5 SPI1_SCK; PA7 SPI1_MOSI; PA6 SPI1_MISO;
 	spi_struct.SPI_FirstBit=SPI_FirstBit_MSB;
 	spi_struct.SPI_CRCPolynomial=7;
 	SPI_Init(SPI1,&spi_struct);
-	SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Tx,ENABLE);
-	SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Rx,ENABLE);
-	SPI_Cmd(SPI1,ENABLE);
+	//SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Tx,ENABLE);
+	//SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Rx,ENABLE);
+	//SPI_Cmd(SPI1,ENABLE);
+}
+
+void strt(){
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2,DISABLE);//disabling pwm;
+	uint16_t selected_pin=(is_s1)?GPIO_Pin_0:GPIO_Pin_1;//selecting pin for further communication;
+	SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Tx,ENABLE);//starting dma_tx;
+	SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Rx,ENABLE);//starting dma_rx;
+	SPI_Cmd(SPI1,ENABLE);//starting spi;
+
+
 }
 
 int main(void){
