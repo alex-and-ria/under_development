@@ -47,6 +47,7 @@ void init_gpios(){
 	gpio_struct.GPIO_Pin=GPIO_Pin_1;
 	gpio_struct.GPIO_Speed=GPIO_Speed_50MHz;
 	GPIO_Init(GPIOA,&gpio_struct);
+	GPIO_ResetBits(GPIOA,GPIO_Pin_1);
 
 //spi configuration;
 	gpio_struct.GPIO_Mode=GPIO_Mode_AIN;
@@ -63,7 +64,7 @@ void init_gpios(){
 	GPIO_Init(GPIOA,&gpio_struct);
 }
 
-bool is_selected(){
+uint8_t is_selected(){
 	ADC1->CR2|=ADC_CR2_SWSTART;//Starts conversion of regular channels (1st channel);
 	while(!(ADC1->SR&ADC_SR_EOC));//waiting for conversion to be completed;
 	uint32_t adc_res=ADC1->DR;//read resulted value; this clearing ADC_SR_EOC bit in ADC1->SR;
@@ -75,6 +76,7 @@ bool is_selected(){
 }
 
 void init_adc(){
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1,ENABLE);
 	ADC1->SQR3=0;//selected channel 0;
 	ADC1->SMPR2|=ADC_SMPR2_SMP0;//set maximum sample time for ADC1_CH0; (for accuracy);
 	ADC1->CR2|=ADC_CR2_EXTSEL|ADC_CR2_EXTTRIG;//select SWSTART as external event used to
@@ -91,7 +93,7 @@ void init_adc(){
 
 void init_dma(){//SPI1_RX -- channel 2; SPI1_TX -- channel 3 (dma1);
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1,ENABLE);
-	DMA1_Channel2->CPAR=(uint32_t)(SPI1->DR);
+	DMA1_Channel2->CPAR=(uint32_t)(&(SPI1->DR));
 	DMA1_Channel2->CMAR=(uint32_t)(rx_buf);
 	DMA1_Channel2->CNDTR=RX_BUF_SZ/2;//SPI data transmitted in half-word mode;
 	DMA1_Channel2->CCR|=DMA_CCR2_PL_0;//DMA channel transfer priority at medium level;
@@ -100,12 +102,12 @@ void init_dma(){//SPI1_RX -- channel 2; SPI1_TX -- channel 3 (dma1);
 //DMA_CCR2_DIR is 0x0 by default (data read from peripheral);
 	DMA1_Channel2->CCR|=DMA_CCR2_EN;//enable DMA1_Channel2;
 
-	DMA1_Channel3->CPAR=(uint32_t)(SPI1->DR);
+	DMA1_Channel3->CPAR=(uint32_t)(&(SPI1->DR));
 	DMA1_Channel3->CMAR=(uint32_t)(tx_buf);
 	DMA1_Channel3->CNDTR=sizeof(tx_buf)/2;//SPI data transmitted in half-word mode;
 	DMA1_Channel3->CCR|=DMA_CCR3_PL_0;//DMA channel transfer priority at medium level;
 	DMA1_Channel3->CCR|=DMA_CCR3_MSIZE_0|DMA_CCR3_PSIZE_0|DMA_CCR3_MINC|DMA_CCR3_DIR;//DMA
-//configured as folows: memory size is half-word; peripheral size is half-word; memory increment
+//configured as follows: memory size is half-word; peripheral size is half-word; memory increment
 //mode enabled; data read from memory;
 	DMA1_Channel3->CCR|=DMA_CCR3_EN;//enable DMA1_Channel3;
 }
@@ -118,13 +120,21 @@ void init_spi(){//PA5 -- SPI1_SCK; PA6 -- SPI1_MISO; PA7 -- SPI1_MOSI;
 	SPI1->CR2|=SPI_CR2_RXDMAEN/*|SPI_CR2_TXDMAEN*/;//Rx buffer DMA enabled;
 	SPI1->CR1|=SPI_CR1_SPE;
 
-	GPIO_SetBits(GPIOA,GPIO_Pin_1);
+	GPIO_SetBits(GPIOA,GPIO_Pin_1);//send 'spi_ready' confirmation to master;
 }
 
 int main(void){
 	init_gpios();
+	init_adc();
 	init_dma();
 	init_spi();
+
+	uint8_t tmlslct=is_selected();
+	//if(tmlslct){
+		GPIO_ResetBits(GPIOA,GPIO_Pin_1);//send 'selected' confirmation to master;
+
+	//}
+
 
     while(1){
 
