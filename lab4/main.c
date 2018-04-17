@@ -162,7 +162,7 @@ void init_pwm(){
 //as long as TIMx_CNT<TIMx_CCR1 else inactive;
 	tim_oc_struct.TIM_OCPolarity=TIM_OCPolarity_High;
 	tim_oc_struct.TIM_OutputState=TIM_OutputState_Enable;
-	tim_oc_struct.TIM_Pulse=50;//TIM_Pulse/(TIM_Period+1)==duty_cycle;
+	tim_oc_struct.TIM_Pulse=25;//TIM_Pulse/(TIM_Period+1)==duty_cycle;
 	TIM_OC3Init(TIM2,&tim_oc_struct);
 	TIM_OC3PreloadConfig(TIM2,TIM_OCPreload_Enable);
 }
