@@ -30,10 +30,12 @@
 #include<misc.h>
 
 #define RX_BUF_SZ 50
+#define s1_dc 25
+#define s2_dc 75
 
 uint8_t tx_buf[]="Hi, initiation SPI communication, master unit \0";
 uint8_t rx_buf[RX_BUF_SZ];
-uint8_t is_s1=0,is_s2=0,s1_spi_ready=0,s2_spi_ready=0;
+uint8_t is_s1=0,is_s2=0,s1_spi_ready=0,s2_spi_ready=0,is_spi_en=0,s1_strt=1;
 
 void init_gpios(){
 	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA,ENABLE);//PA0 and PA1 -- pins for interrupts;
@@ -122,12 +124,20 @@ void stop_extis(){
 void EXTI0_IRQHandler(){
 //	GPIO_SetBits(GPIOA,GPIO_Pin_6);
 	if(GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_0)){//if current pin state is '1', rising edge detected;
-		s1_spi_ready=1;
+		if(s1_spi_ready==0){
+			s1_spi_ready=1;
+		}
+		else{
+			is_s1=0;
+			s1_spi_ready=0;
+		}
 	}
 	else{
-		is_s1=1;
-		stop_extis();
-		strt();
+		if(s1_spi_ready){
+			is_s1=1;
+			//stop_extis();
+			strt();
+		}
 	}
 	EXTI_ClearFlag(EXTI_Line0);
 }
@@ -135,17 +145,25 @@ void EXTI0_IRQHandler(){
 void EXTI1_IRQHandler(){
 //	GPIO_ResetBits(GPIOA,GPIO_Pin_6);
 	if(GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_1)){//if current pin state is '1', rising edge detected;
-		s2_spi_ready=1;
+		if(s2_spi_ready==0){
+			s2_spi_ready=1;
+		}
+		else{
+			is_s2=0;
+			s2_spi_ready=0;
+		}
 	}
 	else{
-		is_s2=1;
-		stop_extis();
-		strt();
+		if(s2_spi_ready){
+			is_s2=1;
+			//stop_extis();
+			strt();
+		}
 	}
 	EXTI_ClearFlag(EXTI_Line1);
 }
 
-void init_pwm(){
+void init_pwm(uint32_t pwm_dc){
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2,ENABLE);
 
 	TIM_TimeBaseInitTypeDef tim_struct;
@@ -162,7 +180,7 @@ void init_pwm(){
 //as long as TIMx_CNT<TIMx_CCR1 else inactive;
 	tim_oc_struct.TIM_OCPolarity=TIM_OCPolarity_High;
 	tim_oc_struct.TIM_OutputState=TIM_OutputState_Enable;
-	tim_oc_struct.TIM_Pulse=25;//TIM_Pulse/(TIM_Period+1)==duty_cycle;
+	tim_oc_struct.TIM_Pulse=pwm_dc;//TIM_Pulse/(TIM_Period+1)==duty_cycle;
 	TIM_OC3Init(TIM2,&tim_oc_struct);
 	TIM_OC3PreloadConfig(TIM2,TIM_OCPreload_Enable);
 }
@@ -194,7 +212,7 @@ void init_dma(){//SPI1_TX -- channel 3, stream 3; SPI1_RX -- channel 3 stream 0;
 //SPI_RX configuration;
 	dma_struct.DMA_Memory0BaseAddr=(uint32_t)rx_buf;
 	dma_struct.DMA_DIR=DMA_DIR_PeripheralToMemory;
-	dma_struct.DMA_BufferSize=RX_BUF_SZ/2;
+	dma_struct.DMA_BufferSize=RX_BUF_SZ/2-1;
 	DMA_Init(DMA2_Stream0,&dma_struct);//SPI1_RX;
 	DMA_Cmd(DMA2_Stream0,ENABLE);
 }
@@ -219,22 +237,53 @@ void init_spi(){//PA5 SPI1_SCK; PA7 SPI1_MOSI; PA6 SPI1_MISO;
 }
 
 void strt(){
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2,DISABLE);//disabling pwm;
-	uint16_t selected_pin=(is_s1)?GPIO_Pin_0:GPIO_Pin_1;//selecting pin for further communication;
+	TIM_Cmd(TIM2,DISABLE);//RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2,DISABLE);//disabling pwm;
+
+	//uint16_t selected_pin=(is_s1)?GPIO_Pin_0:GPIO_Pin_1;//selecting pin for further communication;
 	SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Tx,ENABLE);//starting dma_tx;
 	SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Rx,ENABLE);//starting dma_rx;
 	SPI_Cmd(SPI1,ENABLE);//starting spi;
+	is_spi_en=1;
 
 
 }
 
+void re_strt(){
+	if(is_spi_en&&(!is_s1)&&(!is_s2)){//spi enabled and slave send notification that it finished it's
+//data transfer;
+		if(DMA_GetFlagStatus(DMA2_Stream3,DMA_FLAG_TCIF3)&&
+				DMA_GetFlagStatus(DMA2_Stream0,DMA_FLAG_TCIF0)&&
+				!SPI_I2S_GetFlagStatus(SPI1,SPI_I2S_FLAG_BSY)){
+//SPI1_TX -- channel 3, stream 3; SPI1_RX -- channel 3 stream 0; (dma2);
+//master finished it's data transfer;
+			DMA_ClearFlag(DMA2_Stream3,DMA_FLAG_TCIF3);
+			DMA_ClearFlag(DMA2_Stream0,DMA_FLAG_TCIF0);
+			DMA_Cmd(DMA2_Stream3,DISABLE);
+			DMA_Cmd(DMA2_Stream0,DISABLE);
+			SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Tx,DISABLE);//starting dma_tx;
+			SPI_I2S_DMACmd(SPI1,SPI_I2S_DMAReq_Rx,DISABLE);//starting dma_rx;
+			SPI_Cmd(SPI1,DISABLE);//starting spi;
+			is_spi_en=0;
+			uint8_t tmp_i=0;
+			for(tmp_i=0;tmp_i<sizeof(rx_buf);tmp_i++){
+				rx_buf[tmp_i]=0;
+			}
+			s1_strt=!s1_strt;
+			init_pwm((s1_strt)?s1_dc:s2_dc);
+			init_dma();
+			init_spi();
+		}
+	}
+}
+
 int main(void){
 	init_gpios();
-	init_pwm();
+	init_pwm((s1_strt)?s1_dc:s2_dc);
 	init_dma();
 	init_spi();
 
     while(1){
+    	re_strt();
 
 
     }
