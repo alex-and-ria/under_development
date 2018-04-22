@@ -23,8 +23,8 @@
 #include<stm32f10x_rcc.h>
 #include<stm32f10x_gpio.h>
 
-#define sl1
-//#define sl2
+//#define sl1
+#define sl2
 
 #define RX_BUF_SZ 50
 
@@ -38,7 +38,7 @@
 //(transition region in 0.1 made to prevent simultaneous triggering of both modules);
 #endif
 
-uint8_t rx_buf[RX_BUF_SZ];
+volatile uint8_t rx_buf[RX_BUF_SZ];
 
 void init_gpios(){
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA|RCC_APB2Periph_AFIO,ENABLE);
@@ -51,9 +51,12 @@ void init_gpios(){
 	GPIO_ResetBits(GPIOA,GPIO_Pin_1);
 
 //spi configuration;
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1,ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1,ENABLE);
 	gpio_struct.GPIO_Mode=GPIO_Mode_IN_FLOATING;
 	gpio_struct.GPIO_Pin=GPIO_Pin_5|GPIO_Pin_7;//PA5 (SPI1_SCK) and PA7 (SPI1_MOSI) are inputs;
 	GPIO_Init(GPIOA,&gpio_struct);
+	GPIO_ResetBits(GPIOA,GPIO_Pin_5);
 
 
 //	EXTI->FTSR |= EXTI_FTSR_TR5;//falling PA0 (button released);
@@ -69,7 +72,8 @@ void init_gpios(){
 	gpio_struct.GPIO_Pin=GPIO_Pin_6;//PA6 (SPI1_MISO) -- output;
 	GPIO_Init(GPIOA,&gpio_struct);
 
-//ADC configuration;
+//pwm_ic configuration;
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2,ENABLE);
 	gpio_struct.GPIO_Mode=GPIO_Mode_IN_FLOATING;
 	gpio_struct.GPIO_Pin=GPIO_Pin_0;
 	GPIO_Init(GPIOA,&gpio_struct);
@@ -90,6 +94,9 @@ void init_gpios(){
 
 /*void SPI1_IRQHandler(){
 	uint16_t tmp_dt=SPI1->DR;
+	if(DMA1_Channel2->CNDTR<5){
+		tmp_dt+=0;
+	}
 
 
 	SPI1->SR&=~SPI_SR_RXNE;
@@ -134,7 +141,6 @@ uint8_t is_selected(){
 }*/
 
 void init_pwm_ic(){
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2,ENABLE);
 	TIM2->CCMR1|=TIM_CCMR1_CC1S_0;//CC1 channel is configured as input, IC1 is mapped on TI1;
 	TIM2->CCER&=~TIM_CCER_CC1P;//capture is done on a rising edge of IC1;
 	TIM2->CCMR1|=TIM_CCMR1_CC2S_1;//CC2 channel is configured as input, IC2 is mapped on TI1;
@@ -147,7 +153,6 @@ void init_pwm_ic(){
 }
 
 void init_dma(){//SPI1_RX -- channel 2; SPI1_TX -- channel 3 (dma1);
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1,ENABLE);
 	DMA1_Channel2->CPAR=(uint32_t)(&(SPI1->DR));
 	DMA1_Channel2->CMAR=(uint32_t)(rx_buf);
 	DMA1_Channel2->CNDTR=RX_BUF_SZ/2-1;//SPI data transmitted in half-word mode;
@@ -168,7 +173,6 @@ void init_dma(){//SPI1_RX -- channel 2; SPI1_TX -- channel 3 (dma1);
 }
 
 void init_spi(){//PA5 -- SPI1_SCK; PA6 -- SPI1_MISO; PA7 -- SPI1_MOSI;
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1,ENABLE);
 	SPI1->CR1|=SPI_CR1_DFF|SPI_CR1_SSM;/*|SPI_CR1_CRCEN*/;//16-bit data frame format is selected;
 //NSS software mode selected; CRC calculation selected (but it may not match SPI1->RXCRCR
 //when in full duplex mode different data transmitted and received);
@@ -176,12 +180,11 @@ void init_spi(){//PA5 -- SPI1_SCK; PA6 -- SPI1_MISO; PA7 -- SPI1_MOSI;
 //when idle, first clock transition is the first data capture edge, MSB-first, SSI bit
 	//and MSTR bit are cleared
 	SPI1->CR2|=SPI_CR2_RXDMAEN|SPI_CR2_TXDMAEN;//Rx buffer DMA enabled;
-	SPI1->CR1|=SPI_CR1_SPE;
 
 	GPIO_SetBits(GPIOA,GPIO_Pin_1);//send 'spi_ready' confirmation to master;
 
 
-	/*SPI1->CR2|=SPI_CR2_RXNEIE;
+/*	SPI1->CR2|=SPI_CR2_RXNEIE;
 	NVIC_EnableIRQ(SPI1_IRQn);
 	__enable_irq();*/
 
@@ -192,6 +195,7 @@ void init_spi(){//PA5 -- SPI1_SCK; PA6 -- SPI1_MISO; PA7 -- SPI1_MOSI;
 
 void restrt(){
 	if(is_selected()){
+		SPI1->CR1|=SPI_CR1_SPE;
 		GPIO_ResetBits(GPIOA,GPIO_Pin_1);//send 'selected' confirmation to master;
 		while(!(DMA1->ISR&DMA_ISR_TCIF2)||
 				!(DMA1->ISR&DMA_ISR_TCIF3)||
@@ -215,6 +219,7 @@ void restrt(){
 		gpio_struct.GPIO_Pin=GPIO_Pin_1;
 		gpio_struct.GPIO_Speed=GPIO_Speed_50MHz;
 		GPIO_Init(GPIOA,&gpio_struct);
+		while(is_selected()!=1);
 	}
 }
 

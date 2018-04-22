@@ -1,46 +1,46 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <dependencies>
-   <includePath signature="/ID:\5 2\embedded\labs\lab4\lab4.1\stm_lib\inc /ID:\5 2\embedded\labs\lab4 /ID:\5 2\embedded\labs\lab4\lab4.1\stm_lib /ID:\5 2\embedded\labs\lab4\lab4.1\cmsis /ID:\5 2\embedded\labs\lab4\lab4.1 /ID:\5 2\embedded\labs\lab4\lab4.1\cmsis_boot">
-      <source file="..\..\..\cmsis_boot\stm32f10x.h" lastModified="162d4782be1">
+   <includePath signature="/ID:\under_development-master\under_development-master\lab4\lab4.1\cmsis /ID:\under_development-master\under_development-master\lab4\lab4.1\stm_lib /ID:\under_development-master\under_development-master\lab4\lab4.1 /ID:\under_development-master\under_development-master\lab4\lab4.1\cmsis_boot /ID:\under_development-master\under_development-master\lab4\lab4.1\stm_lib\inc /ID:\under_development-master\under_development-master\lab4">
+      <source file="..\..\..\cmsis_boot\stm32f10x.h" lastModified="162e0749318">
          <include file="..\..\..\cmsis\core_cm3.h"/>
          <include file="..\..\..\cmsis_boot\system_stm32f10x.h"/>
          <include file="..\..\..\cmsis_boot\stm32f10x_conf.h"/>
       </source>
-      <source file="..\..\..\stm_lib\inc\stm32f10x_rcc.h" lastModified="162d4782642">
+      <source file="..\..\..\stm_lib\inc\stm32f10x_rcc.h" lastModified="162e0748f30">
          <include file="..\..\..\cmsis_boot\stm32f10x.h"/>
       </source>
-      <source file="..\..\..\cmsis\core_cmFunc.h" lastModified="162d47831cc">
+      <source file="..\..\..\cmsis\core_cmFunc.h" lastModified="162e0749700">
       </source>
-      <source file="..\..\..\cmsis\core_cmInstr.h" lastModified="162d478322c">
+      <source file="..\..\..\cmsis\core_cmInstr.h" lastModified="162e0749700">
       </source>
-      <source file="..\..\..\stm_lib\src\stm32f10x_rcc.c" lastModified="162d4782692">
+      <source file="..\..\..\stm_lib\src\stm32f10x_rcc.c" lastModified="162e0748f30">
          <include file="..\..\..\stm_lib\inc\stm32f10x_rcc.h"/>
       </source>
-      <source file="..\..\..\stm_lib\src\stm32f10x_gpio.c" lastModified="162d49e9b9e">
+      <source file="..\..\..\stm_lib\src\stm32f10x_gpio.c" lastModified="162e0748f30">
          <include file="..\..\..\stm_lib\inc\stm32f10x_gpio.h"/>
          <include file="..\..\..\stm_lib\inc\stm32f10x_rcc.h"/>
       </source>
-      <source file="..\..\..\cmsis\core_cm3.h" lastModified="162d4782d86">
+      <source file="..\..\..\cmsis\core_cm3.h" lastModified="162e0749318">
          <include file="..\..\..\cmsis\core_cmInstr.h"/>
          <include file="..\..\..\cmsis\core_cmFunc.h"/>
       </source>
-      <source file="..\..\..\cmsis_boot\startup\startup_stm32f10x_md.c" lastModified="162d478275d">
+      <source file="..\..\..\cmsis_boot\startup\startup_stm32f10x_md.c" lastModified="162e0748f30">
       </source>
-      <source file="..\..\..\main.c" lastModified="162e0229f4e">
+      <source file="..\..\..\main.c" lastModified="162ef445361">
          <include file="..\..\..\stm_lib\inc\stm32f10x_rcc.h"/>
          <include file="..\..\..\stm_lib\inc\stm32f10x_gpio.h"/>
       </source>
-      <source file="..\..\..\cmsis_boot\stm32f10x_conf.h" lastModified="162d4782838">
+      <source file="..\..\..\cmsis_boot\stm32f10x_conf.h" lastModified="162e0748f30">
       </source>
-      <source file="..\..\..\stm_lib\inc\stm32f10x_gpio.h" lastModified="162d49e9b02">
+      <source file="..\..\..\stm_lib\inc\stm32f10x_gpio.h" lastModified="162e0748f30">
          <include file="..\..\..\cmsis_boot\stm32f10x.h"/>
       </source>
-      <source file="..\..\..\cmsis_boot\system_stm32f10x.h" lastModified="162d4782922">
+      <source file="..\..\..\cmsis_boot\system_stm32f10x.h" lastModified="162e0748f30">
       </source>
-      <source file="..\..\..\cmsis_boot\system_stm32f10x.c" lastModified="162d47828a5">
+      <source file="..\..\..\mstr.c" lastModified="162e0748f30">
+      </source>
+      <source file="..\..\..\cmsis_boot\system_stm32f10x.c" lastModified="162e0748f30">
          <include file="..\..\..\cmsis_boot\stm32f10x.h"/>
-      </source>
-      <source file="..\..\..\mstr.c" lastModified="162d51ef66e">
       </source>
    </includePath>
 </dependencies>
