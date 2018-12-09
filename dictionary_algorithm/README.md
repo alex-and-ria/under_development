@@ -1,1 +1,0 @@
-The project will consist of a program for generating vocabulary file, a program with node algorithm for a dictionary, STL map algorithm, and STL unordered map algorithm. A comparison is based on calculating average time for finding a translation and total memory usage.
