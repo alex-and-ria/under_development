@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 2.9)
+project(gnr_sqrs)
+find_package(OpenCV REQUIRED )
+include_directories(${OpenCV_INCLUDE_DIRS} )
+SET(GCC_ADDITIONAL_COMPILE_FLAGS "-std=c++11 -g")
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${GCC_ADDITIONAL_COMPILE_FLAGS}")
+add_executable(gnr_sqrs gnr_sqrs.cpp sgmnt.cpp shape.h shape.cpp 2d_pnt.cpp grpr_t0.h grpr_t0.cpp theta_trfm.h theta_trfm.cpp ms_cbck.cpp square.h square.cpp)
+target_link_libraries(gnr_sqrs ${OpenCV_LIBS})
