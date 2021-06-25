@@ -236,7 +236,7 @@ double shape::fn_srch(unsigned int N_tgt,std::vector<shape*>& shps,unsigned int 
 					else{
 						float x_tmp,y_tmp;
 						grpr0.get_cntr(x_tmp,y_tmp);
-						std::cout<<"\ngrpr.cntr=("<<x_tmp<<' '<<y_tmp<<"); theta_tmp="<<theta_tmp;
+						std::cout<<"\ngrpr.cntr=("<<x_tmp/1000.<<' '<<y_tmp/1000.<<"); theta_tmp="<<(theta_tmp/acos(-1))*180<<" sprd0="<<sqrt((p0x-p1x)*(p0x-p1x)+(p0y-p1y)*(p0y-p1y))/1000;
 						cv::line(shape::data_img,cv::Point(x_tmp,y_tmp),cv::Point(Max_x,y_tmp),cv::Scalar(220,0,220));
 						cv::namedWindow("data_img", cv::WINDOW_AUTOSIZE ); cv::imshow("data_img",shape::data_img);
 						cv::waitKey(0);

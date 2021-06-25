@@ -54,24 +54,24 @@ bool get_shapes(std::vector<shape*>& shapes, float flp[4]){//flp[0] -- file data
 	std::ifstream ifo(ifn,std::ios::in|std::ios::binary);
 	if(ifo.is_open()){
 		_2d_pnt _2d_pnt_tmp;
-		float file_ln[6];
-		for(unsigned int i=0;i<6;i++){//x,y,z,roll,pitch,yaw;
+		float file_ln[7];
+		for(unsigned int i=0;i<7;i++){//idx,x,y,z,roll,pitch,yaw;
 			ifo>>file_ln[i];
 		}
-		flp[0]=file_ln[0]; flp[1]=flp[0]; flp[2]=file_ln[1]; flp[3]=flp[2];
+		flp[0]=file_ln[1]; flp[1]=file_ln[1]; flp[2]=file_ln[2]; flp[3]=file_ln[2];
 		ifo.seekg(0,std::ios::beg);
 		while(1){
 			ifo>>file_ln[0];
 			if(ifo.eof()){
 				break;
 			}
-			for(unsigned int i=1;i<6;i++){//x,y,z,roll,pitch,yaw;
+			for(unsigned int i=1;i<7;i++){//idx,x,y,z,roll,pitch,yaw;
 				ifo>>file_ln[i];
 			}
-			if(file_ln[0]<flp[0]) flp[0]=file_ln[0];//min_x;
-			if(file_ln[0]>flp[1]) flp[1]=file_ln[0];//max_x;
-			if(file_ln[1]<flp[2]) flp[2]=file_ln[1];//min_y;
-			if(file_ln[1]>flp[3]) flp[3]=file_ln[1];//max_y;
+			if(file_ln[1]<flp[0]) flp[0]=file_ln[1];//min_x;
+			if(file_ln[1]>flp[1]) flp[1]=file_ln[1];//max_x;
+			if(file_ln[2]<flp[2]) flp[2]=file_ln[2];//min_y;
+			if(file_ln[2]>flp[3]) flp[3]=file_ln[2];//max_y;
 		}
 		ifo.clear(); ifo.seekg(0,std::ios::beg);
 		while(1){
@@ -79,15 +79,15 @@ bool get_shapes(std::vector<shape*>& shapes, float flp[4]){//flp[0] -- file data
 			if(ifo.eof()){
 				break;
 			}
-			for(unsigned int i=1;i<6;i++){//x,y,z,roll,pitch,yaw;
+			for(unsigned int i=1;i<7;i++){//idx,x,y,z,roll,pitch,yaw;
 				ifo>>file_ln[i];
 			}
-			_2d_pnt_tmp((file_ln[0]-flp[0])*1000,(file_ln[1]-flp[2])*1000);
-			shapes.push_back(new square(_2d_pnt_tmp,file_ln[5]));
+			_2d_pnt_tmp((file_ln[1]-flp[0])*1000,(file_ln[2]-flp[2])*1000);
+			shapes.push_back(new square(_2d_pnt_tmp,file_ln[6]));
 		}
 		ifo.close();
 		std::cout<<"\nflp="<<flp[0]<<' '<<flp[1]<<' '<<flp[2]<<' '<<flp[3];
-		if(0) for(unsigned int i=0;i<shapes.size();i++){
+		if(1) for(unsigned int i=0;i<shapes.size();i++){
 			std::cout<<"\ncntr=("<<shapes.at(i)->cntr.x<<","<<shapes.at(i)->cntr.y<<")";
 		
 		}
@@ -121,8 +121,8 @@ int main(){
 	}
 	
 	std::vector<shape*> shapes;
-	gen_shapes(shapes);
-	//float flp[4]; if(get_shapes(shapes,flp)==0) return 1;
+	//gen_shapes(shapes);
+	float flp[4]; if(get_shapes(shapes,flp)==0) return 1;
 	//cv::resize(shape::data_img,shape::data_img,cv::Size((int)((flp[1]-flp[0])*1000+0.5),(int)((flp[3]-flp[2])*1000+0.5)),1,1);
 	
 	//cg_sqrs(sqrs);
@@ -135,7 +135,7 @@ int main(){
 	
 	shape::fn_srch(2,shapes);
 	
-	return 0;    
+	return 0;
 
 
 
