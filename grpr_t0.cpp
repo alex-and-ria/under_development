@@ -13,6 +13,21 @@ void grpr_t0::get_sgmnts(sgmnt ft_sgmnts[2]){
 
 }
 
+
+void grpr_t0::get_bx_sgmnts(sgmnt bx_sgmnts[4]){
+	bx_sgmnts[0].set_data(crds[0],crds[1],crds[2],crds[3]);
+	bx_sgmnts[1].set_data(crds[0],crds[1],crds[4],crds[5]);
+	bx_sgmnts[2].set_data(crds[2],crds[3],crds[6],crds[7]);
+	bx_sgmnts[3].set_data(crds[4],crds[5],crds[6],crds[7]);
+
+}
+
+void grpr_t0::get_cntr(float& x, float& y){
+	x=(crds[0]+crds[2]+crds[4]+crds[6]+0.0)/4.;
+	y=(crds[1]+crds[5]+crds[7]+crds[3]+0.0)/4.;
+
+}
+
 /*std::ostream& operator<<(std::ostream& os,const grpr_t0& grpr0){
 	os<<"\ncrds=[";
 	for(unsigned short int i=0;i<8;i++){

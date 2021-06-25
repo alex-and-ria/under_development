@@ -178,7 +178,7 @@ double shape::fn_srch(unsigned int N_tgt,std::vector<shape*>& shps,unsigned int 
 				pnt_trfm(p2x,p2y,-theta_tmp,NULL,NULL);
 				pnt_trfm(p3x,p3y,-theta_tmp,NULL,NULL);
 				if(sqrt((p0x-p1x)*(p0x-p1x)+(p0y-p1y)*(p0y-p1y))>grpr_t0::fms){
-					std::cout<<"\nfms="<<grpr_t0::fms<<"; dst="<<sqrt((p0x-p1x)*(p0x-p1x)+(p0y-p1y)*(p0y-p1y)); continue;
+					if(0) std::cout<<"\nfms="<<grpr_t0::fms<<"; dst="<<sqrt((p0x-p1x)*(p0x-p1x)+(p0y-p1y)*(p0y-p1y)); continue;
 				}
 				cv::line(shape::data_img,cv::Point(p0x,p0y),cv::Point(p1x,p1y),cv::Scalar(0,255,0));
 				cv::line(shape::data_img,cv::Point(p1x,p1y),cv::Point(p2x,p2y),cv::Scalar(0,255,0));
@@ -229,6 +229,20 @@ double shape::fn_srch(unsigned int N_tgt,std::vector<shape*>& shps,unsigned int 
 					cv::waitKey(0);
 					cv::line(shape::data_img,cv::Point(grpr0.crds[0],grpr0.crds[1]),cv::Point(grpr0.crds[4],grpr0.crds[5]),cv::Scalar(255,255,255));
 					cv::line(shape::data_img,cv::Point(grpr0.crds[2],grpr0.crds[3]),cv::Point(grpr0.crds[6],grpr0.crds[7]),cv::Scalar(255,255,255));
+					unsigned int N_tgt_tst=set_tgts(grpr0,sbst,wd_sbst);
+					if(N_tgt_tst!=N_tgt){
+						std::cout<<"\nN_tgt_tst="<<N_tgt_tst<<" N_tgt="<<N_tgt;
+					}
+					else{
+						float x_tmp,y_tmp;
+						grpr0.get_cntr(x_tmp,y_tmp);
+						std::cout<<"\ngrpr.cntr=("<<x_tmp<<' '<<y_tmp<<"); theta_tmp="<<theta_tmp;
+						cv::line(shape::data_img,cv::Point(x_tmp,y_tmp),cv::Point(Max_x,y_tmp),cv::Scalar(220,0,220));
+						cv::namedWindow("data_img", cv::WINDOW_AUTOSIZE ); cv::imshow("data_img",shape::data_img);
+						cv::waitKey(0);
+						cv::line(shape::data_img,cv::Point(x_tmp,y_tmp),cv::Point(Max_x,y_tmp),cv::Scalar(255,255,255));
+						
+					}
 					
 				}
 				
@@ -264,13 +278,40 @@ bool shape::ft_cnfg_chck(grpr_t0& grpr0,std::vector<shape*>& wd_sbst){
 
 }
 
-unsigned int virtual set_tgts(std::vector<shape*>& sbst,std::vector<shape*>& wd_sbst){
-	std::vector<shape*> cbnd_sbst; cbnd_sbst.clear();
-	
-	
-	
-	wd_sbst.insert(wd_sbst.end(),shps.at(i)->lnks.begin()+N_tgt-1,shps.at(i)->lnks.end());
-	
-	for()
+unsigned int shape::set_tgts(grpr_t0& grpr0,std::vector<shape*>& sbst,std::vector<shape*>& wd_sbst){//TODO double check;
+	std::vector<shape*> cbnd_sbst(sbst); cbnd_sbst.insert(cbnd_sbst.end(),wd_sbst.begin(),wd_sbst.end());
+	sgmnt grpr_bx[4]; grpr0.get_bx_sgmnts(grpr_bx);
+	sgmnt ln_sgmnt;
+	cv::line(shape::data_img,cv::Point(grpr0.crds[0],grpr0.crds[1]),cv::Point(grpr0.crds[2],grpr0.crds[3]),cv::Scalar(150,0,150));
+	cv::line(shape::data_img,cv::Point(grpr0.crds[0],grpr0.crds[1]),cv::Point(grpr0.crds[4],grpr0.crds[5]),cv::Scalar(150,0,150));
+	cv::line(shape::data_img,cv::Point(grpr0.crds[2],grpr0.crds[3]),cv::Point(grpr0.crds[6],grpr0.crds[7]),cv::Scalar(150,0,150));
+	cv::line(shape::data_img,cv::Point(grpr0.crds[4],grpr0.crds[5]),cv::Point(grpr0.crds[6],grpr0.crds[7]),cv::Scalar(150,0,150));
 
+	usi crs_cnt=0; unsigned int num_elem=0;
+	for(unsigned int i=0;i<cbnd_sbst.size();i++){
+		ln_sgmnt.set_data(cbnd_sbst.at(i)->cntr.x,cbnd_sbst.at(i)->cntr.y,Max_x,cbnd_sbst.at(i)->cntr.y);
+		//cv::line(shape::data_img,cv::Point(cbnd_sbst.at(i)->cntr.x,cbnd_sbst.at(i)->cntr.y),cv::Point(Max_x,cbnd_sbst.at(i)->cntr.y),cv::Scalar(150,0,150));
+		crs_cnt=0;
+		for(unsigned int j=0;j<4;j++){
+			if(sgmnt::seg_crs_chck(grpr_bx[j],ln_sgmnt)==cs){
+				crs_cnt++;
+			
+			}
+		}
+		if(0) std::cout<<"\ncrs_cnt="<<crs_cnt;
+		//cv::namedWindow("data_img", cv::WINDOW_AUTOSIZE ); cv::imshow("data_img",shape::data_img);
+		//cv::waitKey(0);
+		//cv::line(shape::data_img,cv::Point(cbnd_sbst.at(i)->cntr.x,cbnd_sbst.at(i)->cntr.y),cv::Point(Max_x,cbnd_sbst.at(i)->cntr.y),cv::Scalar(255,255,255));
+		if(crs_cnt%2==1){
+			num_elem++;
+		}
+	
+	}
+	cv::namedWindow("data_img", cv::WINDOW_AUTOSIZE ); cv::imshow("data_img",shape::data_img);
+	cv::waitKey(0);
+	cv::line(shape::data_img,cv::Point(grpr0.crds[0],grpr0.crds[1]),cv::Point(grpr0.crds[2],grpr0.crds[3]),cv::Scalar(255,255,255));
+	cv::line(shape::data_img,cv::Point(grpr0.crds[0],grpr0.crds[1]),cv::Point(grpr0.crds[4],grpr0.crds[5]),cv::Scalar(255,255,255));
+	cv::line(shape::data_img,cv::Point(grpr0.crds[2],grpr0.crds[3]),cv::Point(grpr0.crds[6],grpr0.crds[7]),cv::Scalar(225,255,255));
+	cv::line(shape::data_img,cv::Point(grpr0.crds[4],grpr0.crds[5]),cv::Point(grpr0.crds[6],grpr0.crds[7]),cv::Scalar(255,255,255));
+	return num_elem;
 }

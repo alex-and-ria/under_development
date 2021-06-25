@@ -24,6 +24,10 @@ class grpr_t0{
 		}*/
 		void operator()(float x0,float y0,float x1,float y1,float x2,float y2,float x3,float y3);
 		void get_sgmnts(sgmnt ft_sgmnts[2]);
+		
+		
+		void get_bx_sgmnts(sgmnt bx_sgmnts[4]);
+		void get_cntr(float& x, float& y);
 		//friend std::ostream& operator<<(std::ostream& os,const grpr_t0& grpr0);
 };
 

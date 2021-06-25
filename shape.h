@@ -45,7 +45,7 @@ class shape{
 		void static crs_chck(std::vector<shape*>& shps);
 		double static fn_srch(unsigned int N_tgt,std::vector<shape*>& shps,unsigned int tst_idx=0);
 		bool static ft_cnfg_chck(grpr_t0& grpr0,std::vector<shape*>& wd_sbst);
-		unsigned int virtual set_tgts(std::vector<shape*>& sbst,std::vector<shape*>& wd_sbst);
+		unsigned int static set_tgts(grpr_t0& grpr0,std::vector<shape*>& sbst,std::vector<shape*>& wd_sbst);//TODO change to pridiction and colision detection method;
 		/*
 		
 		
